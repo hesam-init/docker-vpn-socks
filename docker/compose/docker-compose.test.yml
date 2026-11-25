@@ -4,6 +4,7 @@ services:
       file: docker-compose.base.yml
       service: ovpn-template
     container_name: vpnbaz-bridge
+    profiles: ["test", "vpnbaz", "all"]
     networks:
       vpn-test: {}
       docker-ovpn-vlan:

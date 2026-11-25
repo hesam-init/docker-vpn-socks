@@ -114,11 +114,9 @@ docker-ovpn-socks/
 ├── docker/                     # Image source (build context) & additional Compose stacks
 │   ├── .dockerignore           # Excludes compose/ from the Docker build context
 │   ├── Dockerfile              # Multi-stage build: Alpine 3.24 base + gost, ovpn & openconnect targets
-│   ├── compose/                # Base service templates & optional Compose stacks
+│   ├── compose/                # Base service templates & test Compose stack
 │   │   ├── docker-compose.base.yml     # Base service templates: ovpn-template & openconnect-template
-│   │   ├── docker-compose.bridge.yml   # Multi-VPN deployment with Macvlan LAN IPs
-│   │   ├── docker-compose.test.yml     # Testing compose file for auth-free VPN configs
-│   │   └── docker-compose.example.yml  # Annotated example using the ovpn/openconnect presets
+│   │   └── docker-compose.test.yml     # Testing compose file for auth-free VPN configs
 │   └── scripts/
 │       ├── openvpn-entrypoint.sh     # OpenVPN entrypoint & config builder
 │       ├── openconnect-entrypoint.sh # OpenConnect entrypoint & credential loader
@@ -255,17 +253,22 @@ Empty or missing values fall back to the official sources. Write plain `KEY=valu
 
 ```bash
 # Build the images (uses host networking for reliable mirror access)
-make               # plain `docker build --network host`, no buildx needed
+make                  # plain `docker build --network host`, no buildx needed
 
-# Start services in the background (docker-compose.yml)
-make up               # or plain `docker compose up -d`
+# Start the default profile (`vpnbaz`) in the background
+make up               # or `docker compose --profile vpnbaz up -d`
 
-# View live container logs
+# Start specific provider/protocol profiles (space- or comma-separated)
+make up P="vpnbaz openconnect"
+make up P=eliteping   # requires configs/ovpn-eliteping/auth.txt
+
+# List available profiles and view live container logs
+make profiles
 make logs
 ```
 
 > [!NOTE]
-> The main `docker-compose.yml` is at the repo root, so plain `docker compose` works there. The base templates and the bridge/test/example stacks live in `docker/compose/`: plain `docker compose` needs `-p docker-ovpn-socks -f docker/compose/<file>` for those (the `make` targets add it), and their volume paths are relative to `docker/compose/`, so they start with `../../configs/`.
+> The main `docker-compose.yml` is at the repo root, so plain `docker compose` works there. The base templates and the test stack live in `docker/compose/`: plain `docker compose` needs `-p docker-ovpn-socks -f docker/compose/<file>` for those (the `make` targets add it), and their volume paths are relative to `docker/compose/`, so they start with `../../configs/`.
 
 ---
 
@@ -329,29 +332,43 @@ curl --proxy socks5h://127.0.0.1:9090 ifconfig.me
 
 ---
 
-## Compose Files Reference
+## Compose Files & Profiles Reference
 
-The main `docker-compose.yml` is at the repo root; the base templates and the bridge/test/example stacks are in `docker/compose/`. The `make` targets pick a stack with `STACK=main|bridge|test|example` (default `main`) and limit `up`/`restart`/`logs` to some services with `S=...`:
+The main `docker-compose.yml` is at the repo root; the base templates and the test stack are in `docker/compose/`. Every service is assigned to Docker Compose `profiles:` so you can run one provider, combine multiple providers without port conflicts, or start a single protocol group.
+
+The `make` targets pick a stack with `STACK=main|test` (default `main`), select profiles with `P=...` (space- or comma-separated), and limit `up`/`restart`/`logs` to specific services with `S=...`:
 
 ```bash
-make up               # docker compose -p docker-ovpn-socks -f docker-compose.yml up -d
-make down             # stop and remove the stack's containers
-make restart          # restart the stack's containers (S=... for some services)
-make logs             # follow logs
-make ps               # list containers and health
-make config           # validate and print the resolved compose file
-make up STACK=bridge S=tci-bridge
+make profiles                 # list profiles defined in the active stack
+make up                       # starts `vpnbaz` by default (or COMPOSE_PROFILES from .env)
+make up P=eliteping           # start only the eliteping OpenVPN profile (ports 1090-1093)
+make up P="vpnbaz openconnect" # combine vpnbaz OpenVPN (1080-1085) + OpenConnect (9090-9091)
+make up P=all                 # start all standard port-mapped provider profiles together
+make up P=bridge              # start the macvlan LAN IP containers (requires docker-ovpn-vlan)
+make down                     # stop and remove all containers in the stack
+make down P=eliteping         # stop only the eliteping profile
+make restart P=vpnbaz         # restart the vpnbaz profile (S=... limits to specific services)
+make logs                     # follow logs across running profiles
+make ps                       # list containers and health
+make config                   # validate and print all services in the stack
 ```
 
-### 1. `docker-compose.yml` — Multi-Protocol Deployment
-Contains standard port-forwarded VPN services:
-- `vpnbaz-socks`: OpenVPN client (container: `vpnbaz`, port mapped to host `1080:1080`)
-- `eliteping-socks`: OpenVPN client (container: `eliteping`, port mapped to host `1081:1080`)
-- `tci-socks`: OpenConnect client (container: `tci-socks`, port mapped to host `9090:1080`)
+You can also persist your preferred default profiles in `.env` (plain `COMPOSE_PROFILES=vpnbaz,openconnect` without quotes), which works with both `make up` and plain `docker compose up -d`. Passing `P=...` to `make` or `--profile ...` to `docker compose` overrides `COMPOSE_PROFILES`.
+
+### 1. `docker-compose.yml` — Profile-Based Multi-Protocol Deployment
+
+| Profile | Services | Host Ports | Config / Source | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `vpnbaz` | `vpnbaz-socks` .. `vpnbaz6-socks` | `1080`–`1085` | `configs/ovpn-vpnbaz/*.ovpn` | Default profile for `make up`; also in `ovpn`, `all` |
+| `eliteping` | `eliteping-de/nl/tr/ir-de-socks` | `1090`–`1093` | `configs/ovpn-eliteping/*.ovpn` | Requires `configs/ovpn-eliteping/auth.txt`; also in `ovpn`, `all` |
+| `openconnect` / `vpnbaz-oc` | `vpnbaz-openconnect-socks`, `vpnbaz2-openconnect-socks` | `9090`–`9091` | `mcipower1.apibaz.org:110`, `shatel1.apibaz.org:110` | Uses `configs/ovpn-vpnbaz/auth.txt`; also in `all` |
+| `ovpn` | All `vpnbaz` + `eliteping` OpenVPN services | `1080`–`1085`, `1090`–`1093` | `configs/ovpn-*` | Starts all OpenVPN providers |
+| `all` | `vpnbaz` + `eliteping` + `openconnect` | `1080`–`1085`, `1090`–`1093`, `9090`–`9091` | All standard providers | Works on both Compose v2 and legacy v1.29 |
+| `bridge` | `vpnbaz-bridge`, `eliteping-bridge`, `tci-bridge` | `1080`, `1081`, `9090` + LAN IPs | `docker-ovpn-vlan` macvlan (`192.168.0.{110,120,121}`) | Kept outside `all` due to port overlap and external network |
 
 ```bash
-make up
-make logs
+make up P=vpnbaz
+make logs P=vpnbaz
 ```
 
 ### 2. `docker/compose/docker-compose.base.yml` — Service Templates
@@ -367,43 +384,31 @@ make ARGS=...             # extra flags are passed to docker build
 make clean                # remove the ovpn-client and openconnect-client images
 ```
 
-### 3. `docker/compose/docker-compose.bridge.yml` — Multi-VPN with Macvlan LAN IPs
-Deploys VPN containers directly onto your physical local network using Docker's macvlan driver. Each container receives a dedicated LAN IP:
+### 3. `bridge` Profile (in `docker-compose.yml`) — Multi-VPN with Macvlan LAN IPs
+Deploys VPN containers directly onto your physical local network using Docker's macvlan driver (`profiles: ["bridge"]`). Each container receives a dedicated LAN IP:
 - `vpnbaz-bridge`: OpenVPN on LAN IP `192.168.0.120:1080`
 - `eliteping-bridge`: OpenVPN on LAN IP `192.168.0.121:1080`
 - `tci-bridge`: OpenConnect on LAN IP `192.168.0.110:1080` (also maps port `9090`)
 
 > [!IMPORTANT]
-> The `docker-ovpn-vlan` external network must be created before starting this compose file. For complete instructions and host communication setup, see [wiki/bridge.md](wiki/bridge.md).
+> The `docker-ovpn-vlan` external network must be created before starting this profile. For complete instructions and host communication setup, see [wiki/bridge.md](wiki/bridge.md).
 
 ```bash
-make up STACK=bridge
+make up P=bridge
 ```
 
 ### 4. `docker/compose/docker-compose.test.yml` — Authentication-Free Testing
-A lightweight test environment with `CREDENTIALS=false` for testing `.ovpn` configurations that use embedded keys/certificates or public endpoints without authentication:
+A lightweight test environment (`profiles: ["test", "vpnbaz", "all"]`) with `CREDENTIALS=false` for testing `.ovpn` configurations that use embedded keys/certificates or public endpoints without authentication:
 
 ```bash
-make up STACK=test
+make up STACK=test P=test
 ```
-
-### 5. `docker/compose/docker-compose.example.yml` — Preset Example
-A starting point for new stacks. It defines two YAML presets, `x-ovpn` (OpenVPN, mounts `configs/ovpn-provider`) and `x-openconnect` (OpenConnect, mounts `configs/ovpn-provider/auth.txt`), so each service only sets its host port and `VPN_CONFIG` file name or `VPN_SERVER`:
-
-```yaml
-  ovpn-server1:
-    <<: *ovpn
-    ports: ["1080:1080"]
-    environment: VPN_CONFIG=server1.ovpn
-```
-
-A service that sets its own `volumes:` replaces the preset's mount rather than adding to it. Replace `ovpn-provider`, the `.ovpn` names and `vpn.example.com` with your own, then check it with `make config STACK=example`.
 
 ---
 
 ## Adding More VPN Connections
 
-To add another VPN service, simply define a new block in your compose file extending the appropriate base template. The examples below are for the root `docker-compose.yml`; in a file under `docker/compose/`, use `file: docker-compose.base.yml` and `../../configs/...` instead:
+To add another VPN service, simply define a new block in your compose file extending the appropriate base template and add it to the desired `profiles:` list. The examples below are for the root `docker-compose.yml`; in a file under `docker/compose/`, use `file: docker-compose.base.yml` and `../../configs/...` instead:
 
 ### Adding an OpenVPN Service:
 
@@ -413,11 +418,12 @@ vpn-nl-socks:
     file: docker/compose/docker-compose.base.yml
     service: ovpn-template
   container_name: vpn-nl-socks
+  profiles: ["my-vpn", "ovpn", "all"]
   environment:
     - PROXY_PORT=1080
     - VPN_CONFIG=/etc/openvpn/nl-server.ovpn
   ports:
-    - "1083:1080"
+    - "1086:1080"
   volumes:
     - ./configs/my-nl-vpn:/etc/openvpn:ro,z
 ```
@@ -430,18 +436,19 @@ vpn-cisco-socks:
     file: docker/compose/docker-compose.base.yml
     service: openconnect-template
   container_name: vpn-cisco-socks
+  profiles: ["my-vpn", "openconnect", "all"]
   environment:
     - PROXY_PORT=1080
     - VPN_SERVER=cisco.gateway.com
     - VPN_USER=myuser
     - VPN_PASSWORD=mypassword
   ports:
-    - "1084:1080"
+    - "9092:1080"
 ```
 
 Start the new service:
 ```bash
-make up S="vpn-nl-socks vpn-cisco-socks"
+make up P=my-vpn S="vpn-nl-socks vpn-cisco-socks"
 ```
 
 ---
@@ -487,7 +494,7 @@ Alternatively, set **HTTP Proxy** to the same host and port and check **Also use
 
 ### FoxyProxy Profiles
 
-[`configs/FoxyProxy.json`](configs/FoxyProxy.json) is a ready-made FoxyProxy backup with SOCKS5 profiles (remote DNS on) for the VpnBaz ports `1080`–`1085` and the OpenConnect ports `9090`–`9095`. In FoxyProxy, open **Options** → **Import** and import it from this URL, or download it and import the file:
+[`configs/FoxyProxy.json`](configs/FoxyProxy.json) is a ready-made FoxyProxy backup with SOCKS5 profiles (remote DNS on) for the VpnBaz ports `1080`–`1085`, ElitePing ports `1090`–`1093`, and OpenConnect ports `9090`–`9095`. In FoxyProxy, open **Options** → **Import** and import it from this URL, or download it and import the file:
 
 ```text
 https://raw.githubusercontent.com/hesam-init/docker-ovpn-socks/refs/heads/main/configs/FoxyProxy.json

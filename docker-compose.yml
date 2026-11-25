@@ -1,5 +1,5 @@
-# vpnbaz preset: set VPN_CONFIG to a file name in configs/ovpn-vpnbaz.
-# Each service sets its own ports.
+# vpnbaz OpenVPN preset: set VPN_CONFIG to a file name in configs/ovpn-vpnbaz.
+# Each service sets its own ports and profiles.
 x-vpnbaz: &vpnbaz
   extends:
     file: docker/compose/docker-compose.base.yml
@@ -8,8 +8,17 @@ x-vpnbaz: &vpnbaz
     - ./configs/ovpn-vpnbaz:/etc/openvpn:ro,z
     # - ./configs/shared/vpnbaz.auth:/etc/openvpn/auth.txt:ro,z
 
-# openconnect preset: set VPN_SERVER; credentials come from configs/ovpn-vpnbaz/auth.txt.
-# Each service sets its own ports.
+# eliteping OpenVPN preset: set VPN_CONFIG to a file name in configs/ovpn-eliteping.
+# Requires configs/ovpn-eliteping/auth.txt (line 1 user, line 2 password).
+x-eliteping: &eliteping
+  extends:
+    file: docker/compose/docker-compose.base.yml
+    service: ovpn-template
+  volumes:
+    - ./configs/ovpn-eliteping:/etc/openvpn:ro,z
+
+# vpnbaz OpenConnect preset: set VPN_SERVER; credentials come from configs/ovpn-vpnbaz/auth.txt.
+# Each service sets its own ports and profiles.
 x-vpnbaz-openconnect: &vpnbaz-oc
   extends:
     file: docker/compose/docker-compose.base.yml
@@ -18,27 +27,117 @@ x-vpnbaz-openconnect: &vpnbaz-oc
     - ./configs/ovpn-vpnbaz/auth.txt:/etc/openconnect/auth.txt:ro,z
 
 services:
-  vpnbaz-socks:
-    <<: *vpnbaz
-    ports: ["1080:1080"]
-    environment: ["VPN_CONFIG=Smart3MTN.ovpn"]
-
-  vpnbaz2-socks:
-    <<: *vpnbaz
-    ports: ["1081:1080"]
-    environment: ["VPN_CONFIG=Smart9MTN-nl.ovpn"]
-
-  vpnbaz3-socks:
-    <<: *vpnbaz
-    ports: ["1082:1080"]
-    environment: ["VPN_CONFIG=Smart10MTN-nl.ovpn"]
-
+  # ── openconnect / vpnbaz-oc (ports 9090-9091; slots 9092-9095 reserved) ─────
   vpnbaz-openconnect-socks:
     <<: *vpnbaz-oc
+    profiles: ["openconnect", "vpnbaz-oc", "all"]
     ports: ["9090:1080"]
     environment: ["VPN_SERVER=mcipower1.apibaz.org:110"]
 
-  vpnbaz2-openconnect-socks:
+  vpnbaz1-openconnect-socks:
     <<: *vpnbaz-oc
+    profiles: ["openconnect", "vpnbaz-oc", "all"]
     ports: ["9091:1080"]
     environment: ["VPN_SERVER=shatel1.apibaz.org:110", "VPN_OS=android"]
+
+  # ── vpnbaz (OpenVPN, ports 1080-1085) ───────────────────────────────────────
+  vpnbaz-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1080:1080"]
+    environment: ["VPN_CONFIG=Smart3MTN.ovpn"]
+
+  vpnbaz1-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1081:1080"]
+    environment: ["VPN_CONFIG=Smart9MTN-nl.ovpn"]
+
+  vpnbaz2-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1082:1080"]
+    environment: ["VPN_CONFIG=Smart10MTN-nl.ovpn"]
+
+  vpnbaz3-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1083:1080"]
+    environment: ["VPN_CONFIG=Smart11MTN-nl.ovpn"]
+
+  vpnbaz4-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1084:1080"]
+    environment: ["VPN_CONFIG=Smart12MTN-nl.ovpn"]
+
+  vpnbaz5-socks:
+    <<: *vpnbaz
+    profiles: ["vpnbaz", "ovpn", "all"]
+    ports: ["1085:1080"]
+    environment: ["VPN_CONFIG=Smart1MTN.ovpn"]
+
+  # ── eliteping (OpenVPN, ports 1090-1093) ────────────────────────────────────
+  eliteping-de-socks:
+    <<: *eliteping
+    profiles: ["eliteping", "all"]
+    ports: ["1090:1080"]
+    environment: ["VPN_CONFIG=tcp-de1.e-mix.ir.ovpn"]
+
+  eliteping-nl-socks:
+    <<: *eliteping
+    profiles: ["eliteping", "all"]
+    ports: ["1091:1080"]
+    environment: ["VPN_CONFIG=tcp-nl1.e-mix.ir.ovpn"]
+
+  eliteping-tr-socks:
+    <<: *eliteping
+    profiles: ["eliteping", "all"]
+    ports: ["1092:1080"]
+    environment: ["VPN_CONFIG=tcp-tr2.e-mix.ir.ovpn"]
+
+  eliteping-ir-de-socks:
+    <<: *eliteping
+    profiles: ["eliteping", "all"]
+    ports: ["1093:1080"]
+    environment: ["VPN_CONFIG=ir.de1.e-mix.ir.ovpn"]
+
+  # ── bridge (macvlan LAN IPs via external docker-ovpn-vlan; see wiki/bridge.md) ─
+  vpnbaz-bridge:
+    <<: *vpnbaz
+    container_name: vpnbaz-bridge
+    profiles: ["bridge"]
+    networks:
+      ovpn-bridge: {}
+      docker-ovpn-vlan:
+        ipv4_address: 192.168.0.120
+    ports: ["1080:1080"]
+    environment: ["VPN_CONFIG=/etc/openvpn/Smart1MTN.ovpn"]
+
+  eliteping-bridge:
+    <<: *eliteping
+    container_name: eliteping-bridge
+    profiles: ["bridge"]
+    networks:
+      ovpn-bridge: {}
+      docker-ovpn-vlan:
+        ipv4_address: 192.168.0.121
+    ports: ["1081:1080"]
+    environment: ["VPN_CONFIG=/etc/openvpn/de3.e-mix.ir.ovpn"]
+
+  tci-bridge:
+    <<: *vpnbaz-oc
+    container_name: tci-bridge
+    profiles: ["bridge"]
+    networks:
+      ovpn-bridge: {}
+      docker-ovpn-vlan:
+        ipv4_address: 192.168.0.110
+    ports: ["9090:1080"]
+    environment: ["VPN_SERVER=mcipower1.apibaz.org"]
+
+networks:
+  ovpn-bridge:
+    driver: bridge
+  docker-ovpn-vlan:
+    external: true

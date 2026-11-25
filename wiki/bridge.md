@@ -82,43 +82,33 @@ Verify network creation:
 docker network inspect docker-ovpn-vlan --format '{{json .IPAM.Config}}'
 ```
 
-### Step 3: Configure `docker/compose/docker-compose.bridge.yml`
+### Step 3: Configure the `bridge` Profile in `docker-compose.yml`
 
-Assign static IP addresses from your reserved macvlan range to each container:
+Assign static IP addresses from your reserved macvlan range to each `bridge`-profile service in `docker-compose.yml`:
 
 ```yaml
 services:
   vpnbaz-bridge:
-    extends:
-      file: docker-compose.base.yml
-      service: ovpn-template
+    <<: *vpnbaz
     container_name: vpnbaz-bridge
+    profiles: ["bridge"]
     networks:
       ovpn-bridge: {}
       docker-ovpn-vlan:
         ipv4_address: 192.168.0.120
-    environment:
-      - PROXY_PORT=1080
-      - VPN_CONFIG=/etc/openvpn/nl1-typ2.ovpn
-    volumes:
-      - ../../configs/ovpn-vpnbaz:/etc/openvpn:ro,z
+    ports: ["1080:1080"]
+    environment: ["VPN_CONFIG=/etc/openvpn/Smart1MTN.ovpn"]
 
   tci-bridge:
-    extends:
-      file: docker-compose.base.yml
-      service: openconnect-template
+    <<: *vpnbaz-oc
     container_name: tci-bridge
+    profiles: ["bridge"]
     networks:
       ovpn-bridge: {}
       docker-ovpn-vlan:
         ipv4_address: 192.168.0.110
-    environment:
-      - PROXY_PORT=1080
-      - VPN_SERVER=mcipower1.apibaz.org
-    ports:
-      - "9090:1080"
-    volumes:
-      - ../../configs/ovpn-vpnbaz/auth.txt:/etc/openconnect/auth.txt:ro,z
+    ports: ["9090:1080"]
+    environment: ["VPN_SERVER=mcipower1.apibaz.org"]
 
 networks:
   ovpn-bridge:
@@ -130,8 +120,8 @@ networks:
 ### Step 4: Start Containers
 
 ```bash
-make up STACK=bridge      # docker compose -p docker-ovpn-socks -f docker/compose/docker-compose.bridge.yml up -d
-make logs STACK=bridge
+make up P=bridge        # docker compose -p docker-ovpn-socks -f docker-compose.yml --profile bridge up -d
+make logs P=bridge
 ```
 
 ---
@@ -240,11 +230,11 @@ curl --proxy socks5://192.168.0.120:1080 https://ipinfo.io
 
 ## 6. Scaling & Maintenance
 
-- **Add More Containers**: Allocate another unused IP from the macvlan range (e.g. `192.168.0.122`) and add a new service block in `docker/compose/docker-compose.bridge.yml`.
+- **Add More Containers**: Allocate another unused IP from the macvlan range (e.g. `192.168.0.122`) and add a new `profiles: ["bridge"]` service block in `docker-compose.yml`.
 - **Cleanup**:
   ```bash
   # Stop containers
-  make down STACK=bridge
+  make down P=bridge
 
   # Remove macvlan network (only when all attached containers are stopped)
   docker network rm docker-ovpn-vlan
