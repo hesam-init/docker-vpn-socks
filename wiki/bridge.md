@@ -82,7 +82,7 @@ Verify network creation:
 docker network inspect docker-ovpn-vlan --format '{{json .IPAM.Config}}'
 ```
 
-### Step 3: Configure `compose/docker-compose.bridge.yml`
+### Step 3: Configure `docker/compose/docker-compose.bridge.yml`
 
 Assign static IP addresses from your reserved macvlan range to each container:
 
@@ -101,7 +101,7 @@ services:
       - PROXY_PORT=1080
       - VPN_CONFIG=/etc/openvpn/nl1-typ2.ovpn
     volumes:
-      - ../configs/ovpn-vpnbaz:/etc/openvpn:ro,z
+      - ../../configs/ovpn-vpnbaz:/etc/openvpn:ro,z
 
   tci-bridge:
     extends:
@@ -118,7 +118,7 @@ services:
     ports:
       - "9090:1080"
     volumes:
-      - ../configs/ovpn-vpnbaz/auth.txt:/etc/openconnect/auth.txt:ro,z
+      - ../../configs/ovpn-vpnbaz/auth.txt:/etc/openconnect/auth.txt:ro,z
 
 networks:
   ovpn-bridge:
@@ -130,7 +130,7 @@ networks:
 ### Step 4: Start Containers
 
 ```bash
-make up STACK=bridge      # docker compose -f compose/docker-compose.bridge.yml up -d
+make up STACK=bridge      # docker compose -p docker-ovpn-socks -f docker/compose/docker-compose.bridge.yml up -d
 make logs STACK=bridge
 ```
 
@@ -240,7 +240,7 @@ curl --proxy socks5://192.168.0.120:1080 https://ipinfo.io
 
 ## 6. Scaling & Maintenance
 
-- **Add More Containers**: Allocate another unused IP from the macvlan range (e.g. `192.168.0.122`) and add a new service block in `compose/docker-compose.bridge.yml`.
+- **Add More Containers**: Allocate another unused IP from the macvlan range (e.g. `192.168.0.122`) and add a new service block in `docker/compose/docker-compose.bridge.yml`.
 - **Cleanup**:
   ```bash
   # Stop containers

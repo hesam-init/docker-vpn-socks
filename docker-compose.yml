@@ -2,7 +2,7 @@
 # Each service sets its own ports.
 x-vpnbaz: &vpnbaz
   extends:
-    file: compose/docker-compose.base.yml
+    file: docker/compose/docker-compose.base.yml
     service: ovpn-template
   volumes:
     - ./configs/ovpn-vpnbaz:/etc/openvpn:ro,z
@@ -12,7 +12,7 @@ x-vpnbaz: &vpnbaz
 # Each service sets its own ports.
 x-vpnbaz-openconnect: &vpnbaz-oc
   extends:
-    file: compose/docker-compose.base.yml
+    file: docker/compose/docker-compose.base.yml
     service: openconnect-template
   volumes:
     - ./configs/ovpn-vpnbaz/auth.txt:/etc/openconnect/auth.txt:ro,z

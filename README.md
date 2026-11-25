@@ -111,23 +111,23 @@ docker-ovpn-socks/
 ├── .env.example                # Optional build mirrors (copy to .env, which is gitignored)
 ├── Makefile                    # Image builds (`make` / `make build-no-cache`) and stack control (`make up` / `make down`)
 ├── docker-compose.yml          # Standard multi-protocol deployment (port mapping)
-├── docker/                     # Image source (build context)
+├── docker/                     # Image source (build context) & additional Compose stacks
+│   ├── .dockerignore           # Excludes compose/ from the Docker build context
 │   ├── Dockerfile              # Multi-stage build: Alpine 3.24 base + gost, ovpn & openconnect targets
+│   ├── compose/                # Base service templates & optional Compose stacks
+│   │   ├── docker-compose.base.yml     # Base service templates: ovpn-template & openconnect-template
+│   │   ├── docker-compose.bridge.yml   # Multi-VPN deployment with Macvlan LAN IPs
+│   │   ├── docker-compose.test.yml     # Testing compose file for auth-free VPN configs
+│   │   └── docker-compose.example.yml  # Annotated example using the ovpn/openconnect presets
 │   └── scripts/
 │       ├── openvpn-entrypoint.sh     # OpenVPN entrypoint & config builder
 │       ├── openconnect-entrypoint.sh # OpenConnect entrypoint & credential loader
 │       ├── openconnect-hook.sh       # OpenConnect vpnc-script hook (wraps stock vpnc-script)
 │       ├── tunnel-up.sh              # Tunnel hook: NAT masquerade, Table 128 routing, & gost proxy
 │       └── lib/common.sh             # Shared helpers sourced by all scripts
-├── compose/
-│   ├── docker-compose.base.yml     # Base service templates: ovpn-template & openconnect-template
-│   ├── docker-compose.bridge.yml   # Multi-VPN deployment with Macvlan LAN IPs
-│   ├── docker-compose.test.yml     # Testing compose file for auth-free VPN configs
-│   └── docker-compose.example.yml  # Annotated example using the ovpn/openconnect presets
 ├── configs/                    # Directory for provider configs & credentials (gitignored)
 │   ├── FoxyProxy.json          # FoxyProxy backup with profiles for the local proxy ports
 │   ├── ovpn-vpnbaz/            # Sample provider directory
-│   ├── ovpn-kart/              # Sample provider directory
 │   └── ovpn-eliteping/         # Sample provider directory
 ├── wiki/
 │   ├── README.md               # Wiki index
@@ -176,7 +176,7 @@ cd docker-ovpn-socks
    services:
      my-ovpn-socks:
        extends:
-         file: compose/docker-compose.base.yml
+         file: docker/compose/docker-compose.base.yml
          service: ovpn-template
        container_name: my-ovpn-socks
        environment:
@@ -198,7 +198,7 @@ cd docker-ovpn-socks
 services:
   my-oc-socks:
     extends:
-      file: compose/docker-compose.base.yml
+      file: docker/compose/docker-compose.base.yml
       service: openconnect-template
     container_name: my-oc-socks
     environment:
@@ -228,7 +228,7 @@ services:
    services:
      my-oc-socks:
        extends:
-         file: compose/docker-compose.base.yml
+         file: docker/compose/docker-compose.base.yml
          service: openconnect-template
        container_name: my-oc-socks
        environment:
@@ -265,7 +265,7 @@ make logs
 ```
 
 > [!NOTE]
-> The main `docker-compose.yml` is at the repo root, so plain `docker compose` works there. The base templates and the bridge/test stacks live in `compose/`: plain `docker compose` needs `-f compose/<file>` for those (the `make` targets add it), and their volume paths are relative to `compose/`, so they start with `../configs/`.
+> The main `docker-compose.yml` is at the repo root, so plain `docker compose` works there. The base templates and the bridge/test/example stacks live in `docker/compose/`: plain `docker compose` needs `-p docker-ovpn-socks -f docker/compose/<file>` for those (the `make` targets add it), and their volume paths are relative to `docker/compose/`, so they start with `../../configs/`.
 
 ---
 
@@ -331,10 +331,10 @@ curl --proxy socks5h://127.0.0.1:9090 ifconfig.me
 
 ## Compose Files Reference
 
-The main `docker-compose.yml` is at the repo root; the base templates and the bridge/test/example stacks are in `compose/`. The `make` targets pick a stack with `STACK=main|bridge|test|example` (default `main`) and limit `up`/`restart`/`logs` to some services with `S=...`:
+The main `docker-compose.yml` is at the repo root; the base templates and the bridge/test/example stacks are in `docker/compose/`. The `make` targets pick a stack with `STACK=main|bridge|test|example` (default `main`) and limit `up`/`restart`/`logs` to some services with `S=...`:
 
 ```bash
-make up               # docker compose -f docker-compose.yml up -d
+make up               # docker compose -p docker-ovpn-socks -f docker-compose.yml up -d
 make down             # stop and remove the stack's containers
 make restart          # restart the stack's containers (S=... for some services)
 make logs             # follow logs
@@ -354,7 +354,7 @@ make up
 make logs
 ```
 
-### 2. `compose/docker-compose.base.yml` — Service Templates
+### 2. `docker/compose/docker-compose.base.yml` — Service Templates
 Defines the base service definitions inherited by other compose files via `extends`:
 - `ovpn-template`: Image `ovpn-client:latest`, `NET_ADMIN`, `/dev/net/tun`, sysctls for IP forwarding and source valid mark, ulimits, fast-stop signal (`SIGKILL`), and automated healthchecks.
 - `openconnect-template`: Image `openconnect-client:latest`, shares identical network capabilities, sysctls, and healthcheck configurations.
@@ -367,7 +367,7 @@ make ARGS=...             # extra flags are passed to docker build
 make clean                # remove the ovpn-client and openconnect-client images
 ```
 
-### 3. `compose/docker-compose.bridge.yml` — Multi-VPN with Macvlan LAN IPs
+### 3. `docker/compose/docker-compose.bridge.yml` — Multi-VPN with Macvlan LAN IPs
 Deploys VPN containers directly onto your physical local network using Docker's macvlan driver. Each container receives a dedicated LAN IP:
 - `vpnbaz-bridge`: OpenVPN on LAN IP `192.168.0.120:1080`
 - `eliteping-bridge`: OpenVPN on LAN IP `192.168.0.121:1080`
@@ -380,14 +380,14 @@ Deploys VPN containers directly onto your physical local network using Docker's 
 make up STACK=bridge
 ```
 
-### 4. `compose/docker-compose.test.yml` — Authentication-Free Testing
+### 4. `docker/compose/docker-compose.test.yml` — Authentication-Free Testing
 A lightweight test environment with `CREDENTIALS=false` for testing `.ovpn` configurations that use embedded keys/certificates or public endpoints without authentication:
 
 ```bash
 make up STACK=test
 ```
 
-### 5. `compose/docker-compose.example.yml` — Preset Example
+### 5. `docker/compose/docker-compose.example.yml` — Preset Example
 A starting point for new stacks. It defines two YAML presets, `x-ovpn` (OpenVPN, mounts `configs/ovpn-provider`) and `x-openconnect` (OpenConnect, mounts `configs/ovpn-provider/auth.txt`), so each service only sets its host port and `VPN_CONFIG` file name or `VPN_SERVER`:
 
 ```yaml
@@ -403,14 +403,14 @@ A service that sets its own `volumes:` replaces the preset's mount rather than a
 
 ## Adding More VPN Connections
 
-To add another VPN service, simply define a new block in your compose file extending the appropriate base template. The examples below are for the root `docker-compose.yml`; in a file under `compose/`, use `file: docker-compose.base.yml` and `../configs/...` instead:
+To add another VPN service, simply define a new block in your compose file extending the appropriate base template. The examples below are for the root `docker-compose.yml`; in a file under `docker/compose/`, use `file: docker-compose.base.yml` and `../../configs/...` instead:
 
 ### Adding an OpenVPN Service:
 
 ```yaml
 vpn-nl-socks:
   extends:
-    file: compose/docker-compose.base.yml
+    file: docker/compose/docker-compose.base.yml
     service: ovpn-template
   container_name: vpn-nl-socks
   environment:
@@ -427,7 +427,7 @@ vpn-nl-socks:
 ```yaml
 vpn-cisco-socks:
   extends:
-    file: compose/docker-compose.base.yml
+    file: docker/compose/docker-compose.base.yml
     service: openconnect-template
   container_name: vpn-cisco-socks
   environment:
@@ -508,7 +508,7 @@ curl --proxy socks5://192.168.0.110:1080 https://ipinfo.io
 
 ## Healthchecks & Container Monitoring
 
-Each container inherits automated health monitoring from `compose/docker-compose.base.yml`:
+Each container inherits automated health monitoring from `docker/compose/docker-compose.base.yml`:
 
 ```yaml
 healthcheck:

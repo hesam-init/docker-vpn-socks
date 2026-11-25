@@ -14,8 +14,8 @@ services:
     ports:
       - "1080:1080"
     volumes:
-      - ../configs/ovpn-vpnbaz:/etc/openvpn:ro,z
-      # - ../configs/shared/vpnbaz.auth:/etc/openvpn/auth.txt:ro,z
+      - ../../configs/ovpn-vpnbaz:/etc/openvpn:ro,z
+      # - ../../configs/shared/vpnbaz.auth:/etc/openvpn/auth.txt:ro,z
 
 networks:
   vpn-test:

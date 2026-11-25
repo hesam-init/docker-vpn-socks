@@ -1,7 +1,7 @@
 # Example stack: copy it, rename the provider folder/servers, and set one host port per service.
 #   make config STACK=example
 #
-# Paths are relative to this file (compose/), so configs live in ../configs/.
+# Paths are relative to this file (docker/compose/), so configs live in ../../configs/.
 
 # OpenVPN preset: set VPN_CONFIG to a file name in configs/ovpn-provider.
 # configs/ovpn-provider/auth.txt holds the login (line 1 user, line 2 password).
@@ -10,7 +10,7 @@ x-ovpn: &ovpn
     file: docker-compose.base.yml
     service: ovpn-template
   volumes:
-    - ../configs/ovpn-provider:/etc/openvpn:ro,z
+    - ../../configs/ovpn-provider:/etc/openvpn:ro,z
 
 # OpenConnect preset: set VPN_SERVER; the login comes from the same auth.txt.
 x-openconnect: &openconnect
@@ -18,7 +18,7 @@ x-openconnect: &openconnect
     file: docker-compose.base.yml
     service: openconnect-template
   volumes:
-    - ../configs/ovpn-provider/auth.txt:/etc/openconnect/auth.txt:ro,z
+    - ../../configs/ovpn-provider/auth.txt:/etc/openconnect/auth.txt:ro,z
 
 services:
   # OpenVPN: one service per .ovpn file, each on its own host port

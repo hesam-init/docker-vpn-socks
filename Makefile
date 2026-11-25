@@ -30,15 +30,17 @@ export DOCKER_REGISTRY ALPINE_APK_MIRROR
 
 ARGS ?=
 IMAGES := ovpn-client:latest openconnect-client:latest
+DOCKER_DIR := docker
+COMPOSE_DIR := $(DOCKER_DIR)/compose
 DOCKER_BUILD := docker build --network host \
 	--build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) --build-arg ALPINE_APK_MIRROR=$(ALPINE_APK_MIRROR) $(ARGS)
 
 STACK ?= main
 S ?=
 STACK_FILE_main := docker-compose.yml
-STACK_FILE_bridge := compose/docker-compose.bridge.yml
-STACK_FILE_test := compose/docker-compose.test.yml
-STACK_FILE_example := compose/docker-compose.example.yml
+STACK_FILE_bridge := $(COMPOSE_DIR)/docker-compose.bridge.yml
+STACK_FILE_test := $(COMPOSE_DIR)/docker-compose.test.yml
+STACK_FILE_example := $(COMPOSE_DIR)/docker-compose.example.yml
 STACK_FILE := $(STACK_FILE_$(STACK))
 # v2 plugin if present, else v1; recursive, so it is only probed when a compose target runs
 COMPOSE_BIN ?= $(shell docker compose version >/dev/null 2>&1 && echo 'docker compose' || echo docker-compose)
@@ -52,8 +54,8 @@ COMPOSE = $(COMPOSE_BIN) -p $(COMPOSE_PROJECT) -f $(or $(STACK_FILE),$(error unk
 all: build
 
 build:
-	$(DOCKER_BUILD) -f docker/Dockerfile --target ovpn -t $(word 1,$(IMAGES)) $(CURDIR)/docker
-	$(DOCKER_BUILD) -f docker/Dockerfile --target openconnect -t $(word 2,$(IMAGES)) $(CURDIR)/docker
+	$(DOCKER_BUILD) -f $(DOCKER_DIR)/Dockerfile --target ovpn -t $(word 1,$(IMAGES)) $(CURDIR)/$(DOCKER_DIR)
+	$(DOCKER_BUILD) -f $(DOCKER_DIR)/Dockerfile --target openconnect -t $(word 2,$(IMAGES)) $(CURDIR)/$(DOCKER_DIR)
 
 build-no-cache:
 	$(MAKE) build ARGS="$(ARGS) --no-cache"
