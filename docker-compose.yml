@@ -30,13 +30,13 @@ services:
   # ── openconnect / vpnbaz-oc (ports 9090-9091; slots 9092-9095 reserved) ─────
   vpnbaz-openconnect-socks:
     <<: *vpnbaz-oc
-    profiles: ["openconnect", "vpnbaz-oc", "all"]
+    profiles: ["vpnbaz-oc", "openconnect", "all"]
     ports: ["9090:1080"]
     environment: ["VPN_SERVER=mcipower1.apibaz.org:110"]
 
   vpnbaz1-openconnect-socks:
     <<: *vpnbaz-oc
-    profiles: ["openconnect", "vpnbaz-oc", "all"]
+    profiles: ["vpnbaz-oc", "openconnect", "all"]
     ports: ["9091:1080"]
     environment: ["VPN_SERVER=shatel1.apibaz.org:110", "VPN_OS=android"]
 
@@ -77,30 +77,12 @@ services:
     ports: ["1085:1080"]
     environment: ["VPN_CONFIG=Smart1MTN.ovpn"]
 
-  # ── eliteping (OpenVPN, ports 1090-1093) ────────────────────────────────────
+  # ── eliteping (OpenVPN, ports 3080-3085) ────────────────────────────────────
   eliteping-de-socks:
     <<: *eliteping
     profiles: ["eliteping", "all"]
-    ports: ["1090:1080"]
-    environment: ["VPN_CONFIG=tcp-de1.e-mix.ir.ovpn"]
-
-  eliteping-nl-socks:
-    <<: *eliteping
-    profiles: ["eliteping", "all"]
-    ports: ["1091:1080"]
-    environment: ["VPN_CONFIG=tcp-nl1.e-mix.ir.ovpn"]
-
-  eliteping-tr-socks:
-    <<: *eliteping
-    profiles: ["eliteping", "all"]
-    ports: ["1092:1080"]
-    environment: ["VPN_CONFIG=tcp-tr2.e-mix.ir.ovpn"]
-
-  eliteping-ir-de-socks:
-    <<: *eliteping
-    profiles: ["eliteping", "all"]
-    ports: ["1093:1080"]
-    environment: ["VPN_CONFIG=ir.de1.e-mix.ir.ovpn"]
+    ports: ["3080:1080"]
+    environment: ["VPN_CONFIG=de4.e-mix.ir.ovpn"]
 
   # ── bridge (macvlan LAN IPs via external docker-ovpn-vlan; see wiki/bridge.md) ─
   vpnbaz-bridge:
